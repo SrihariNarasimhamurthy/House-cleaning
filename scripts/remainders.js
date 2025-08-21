@@ -51,7 +51,10 @@ async function main() {
   const weekKey = getWeekKey(today);
 
   // Use environment HOUSEHOLD_ID
-  const householdId = process.env.HOUSEHOLD_ID || "demo-household";
+  let householdId = (process.env.HOUSEHOLD_ID || "demo-household").replace(
+    /^['"]|['"]$/g,
+    ""
+  );
 
   console.log("HOUSEHOLD_ID env:", householdId);
 
