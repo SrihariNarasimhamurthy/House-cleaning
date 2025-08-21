@@ -17,14 +17,13 @@ jobs:
 
       - run: npm ci || npm i
 
-      # --- Set environment variables safely
+      # --- Set environment variables safely using printf
       - name: Set environment variables
         run: |
-          # Escape $ for HOUSEHOLD_ID
-          echo "HOUSEHOLD_ID='${{ secrets.HOUSEHOLD_ID }}'" >> $GITHUB_ENV
-          echo "EMAIL_USER=${{ secrets.EMAIL_USER }}" >> $GITHUB_ENV
-          echo "EMAIL_PASS=${{ secrets.EMAIL_PASS }}" >> $GITHUB_ENV
-          echo "DEFAULT_NOTIFY_EMAIL=${{ secrets.DEFAULT_NOTIFY_EMAIL }}" >> $GITHUB_ENV
+          printf 'HOUSEHOLD_ID=%s\n' "${{ secrets.HOUSEHOLD_ID }}" >> $GITHUB_ENV
+          printf 'EMAIL_USER=%s\n' "${{ secrets.EMAIL_USER }}" >> $GITHUB_ENV
+          printf 'EMAIL_PASS=%s\n' "${{ secrets.EMAIL_PASS }}" >> $GITHUB_ENV
+          printf 'DEFAULT_NOTIFY_EMAIL=%s\n' "${{ secrets.DEFAULT_NOTIFY_EMAIL }}" >> $GITHUB_ENV
 
       # --- Setup Firebase Service Account
       - name: Setup Firebase Service Account
