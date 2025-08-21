@@ -52,7 +52,10 @@ async function main() {
   const monday = startOfWeek(today, { weekStartsOn: 1 });
   const weekKey = getWeekKey(today);
 
-  const householdId = process.env.HOUSEHOLD_ID || "demo-household";
+  const householdId = (process.env.HOUSEHOLD_ID || "demo-household").replace(
+    /^'|'$/g,
+    ""
+  );
   const householdRef = db.doc(`households/${householdId}`);
   const householdSnap = await householdRef.get();
   if (!householdSnap.exists) {
