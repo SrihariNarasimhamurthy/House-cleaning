@@ -2,7 +2,7 @@ name: Chore Reminders
 
 on:
   schedule:
-    - cron: "0 9 * * *" # Every day 9 AM UTC
+    - cron: "0 9 * * *" # Daily 9 AM UTC
   workflow_dispatch:
 
 jobs:
@@ -10,20 +10,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - run: npm ci || npm i
 
-      - name: Set env variables
+      - name: Set environment variables
         run: |
+          # Escape $ in HOUSEHOLD_ID
+          echo "HOUSEHOLD_ID=${{ secrets.HOUSEHOLD_ID }}" | sed 's/\$/\\$/g' >> $GITHUB_ENV
           echo "EMAIL_USER=${{ secrets.EMAIL_USER }}" >> $GITHUB_ENV
           echo "EMAIL_PASS=${{ secrets.EMAIL_PASS }}" >> $GITHUB_ENV
           echo "DEFAULT_NOTIFY_EMAIL=${{ secrets.DEFAULT_NOTIFY_EMAIL }}" >> $GITHUB_ENV
-          echo "HOUSEHOLD_ID=${{ secrets.HOUSEHOLD_ID//$/\\$ }}" >> $GITHUB_ENV
 
-      - name: Setup Firebase Service Account
+      - name: Setup Firebase service account
         run: |
           mkdir -p scripts
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > scripts/serviceAccountKey.json

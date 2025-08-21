@@ -1,30 +1,27 @@
-// CommonJS for Node
+// CommonJS for Node.js and GitHub Actions
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
 const path = require("path");
 const { startOfWeek, addDays, format } = require("date-fns");
-require("dotenv").config();
+
+// Load local .env only if it exists (for local development)
+require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
 
 // ---- Firebase Admin
-let serviceAccount;
+const serviceAccountPath = path.join(__dirname, "serviceAccountKey.json");
+let firebaseInitialized = false;
 
-if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-  // GitHub Actions: parse secret JSON
-  serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-} else {
-  // Local: use file
-  const localPath = path.join(__dirname, "serviceAccountKey.json");
-  try {
-    serviceAccount = require(localPath);
-  } catch {
-    console.error("Firebase service account not found!");
-    process.exit(1);
-  }
+try {
+  const serviceAccount = require(serviceAccountPath);
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+  firebaseInitialized = true;
+} catch (err) {
+  console.error("Firebase service account not found!");
 }
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
+if (!firebaseInitialized) process.exit(1);
 
 const db = admin.firestore();
 
@@ -40,6 +37,7 @@ const safeKey = (s = "") =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
+
 const getWeekKey = (date) => {
   const monday = startOfWeek(date, { weekStartsOn: 1 });
   const weekNum = Number(format(monday, "I"));
@@ -52,12 +50,14 @@ async function main() {
   const monday = startOfWeek(today, { weekStartsOn: 1 });
   const weekKey = getWeekKey(today);
 
-  const householdId = (process.env.HOUSEHOLD_ID || "demo-household").replace(
-    /^'|'$/g,
-    ""
-  );
+  // Use environment HOUSEHOLD_ID
+  const householdId = process.env.HOUSEHOLD_ID || "demo-household";
+
+  console.log("HOUSEHOLD_ID env:", householdId);
+
   const householdRef = db.doc(`households/${householdId}`);
   const householdSnap = await householdRef.get();
+
   if (!householdSnap.exists) {
     console.log(`Household ${householdId} does not exist.`);
     return;
@@ -70,7 +70,7 @@ async function main() {
   const weekData = weekSnap.exists ? weekSnap.data() : {};
   const choreEntries = weekData.chores || {};
 
-  // Build pending items per day
+  // Build pending items per day (0 = Monday)
   const pendingByDay = Array.from({ length: 7 }, () => []);
   for (const chore of chores) {
     const key = safeKey(chore);
@@ -81,13 +81,13 @@ async function main() {
     }
   }
 
-  // Determine today's index (0=Monday)
-  const jsDay = today.getDay(); // 0=Sunday
-  const dayIndex = (jsDay + 6) % 7;
+  // Determine today’s day index
+  const jsDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+  const dayIndex = (jsDay + 6) % 7; // shift so Monday = 0
 
   const todaysChores = pendingByDay[dayIndex];
   if (!todaysChores.length) {
-    console.log("No chores pending today.");
+    console.log("No chores pending for today.");
     return;
   }
 
@@ -95,7 +95,7 @@ async function main() {
   const toEmail = emails[dayIndex] || process.env.DEFAULT_NOTIFY_EMAIL;
 
   if (!toEmail) {
-    console.log("No email configured for today, skipping.");
+    console.log(`No email configured for today, skipping.`);
     return;
   }
 
@@ -113,7 +113,6 @@ async function main() {
   console.log(`Sent reminder to ${toEmail} for today.`);
 }
 
-console.log("HOUSEHOLD_ID env:", process.env.HOUSEHOLD_ID);
 main().catch((e) => {
   console.error(e);
   process.exit(1);
