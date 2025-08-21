@@ -2,32 +2,29 @@ name: Chore Reminders
 
 on:
   schedule:
-    - cron: "0 9 * * *" # Runs daily at 9 AM UTC
-  workflow_dispatch: # Allow manual trigger
+    - cron: "0 9 * * *" # Daily 9 AM UTC
+  workflow_dispatch: {}
 
 jobs:
   send-reminders:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-
       - run: npm ci || npm i
-
-      - name: Setup Firebase Service Account
-        run: |
-          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > serviceAccountKey.json
-
-      - name: Set environment variables
+      - name: Set env
         run: |
           echo "EMAIL_USER=${{ secrets.EMAIL_USER }}" >> $GITHUB_ENV
           echo "EMAIL_PASS=${{ secrets.EMAIL_PASS }}" >> $GITHUB_ENV
           echo "DEFAULT_NOTIFY_EMAIL=${{ secrets.DEFAULT_NOTIFY_EMAIL }}" >> $GITHUB_ENV
           echo "HOUSEHOLD_ID=${{ secrets.HOUSEHOLD_ID }}" >> $GITHUB_ENV
+
+      - name: Setup Firebase Service Account
+        run: |
+          mkdir -p scripts
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > scripts/serviceAccountKey.json
 
       - name: Run reminders
         run: npm run reminders
