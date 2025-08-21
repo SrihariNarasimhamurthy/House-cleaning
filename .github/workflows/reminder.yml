@@ -2,40 +2,34 @@ name: Chore Reminders
 
 on:
   schedule:
-    - cron: "0 9 * * *" # Daily at 9 AM UTC
+    - cron: "0 9 * * *" # Daily 9 AM UTC
   workflow_dispatch: {}
 
 jobs:
   send-reminders:
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Checkout repo
       - uses: actions/checkout@v4
 
-      # Step 2: Setup Node
       - uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # Step 3: Install dependencies
       - run: npm ci || npm i
 
-      # Step 4: Set environment variables with proper $ escaping
+      # Set environment variables with proper quoting for $
       - name: Set environment variables
         run: |
-          # Escape $ in HOUSEHOLD_ID so Bash doesn't truncate it
-          HOUSEHOLD_ESCAPED="${{ secrets.HOUSEHOLD_ID//$/\\$ }}"
-          echo "HOUSEHOLD_ID=$HOUSEHOLD_ESCAPED" >> $GITHUB_ENV
-          echo "EMAIL_USER=${{ secrets.EMAIL_USER }}" >> $GITHUB_ENV
-          echo "EMAIL_PASS=${{ secrets.EMAIL_PASS }}" >> $GITHUB_ENV
-          echo "DEFAULT_NOTIFY_EMAIL=${{ secrets.DEFAULT_NOTIFY_EMAIL }}" >> $GITHUB_ENV
+          echo "HOUSEHOLD_ID='${{ secrets.HOUSEHOLD_ID }}'" >> $GITHUB_ENV
+          echo "EMAIL_USER='${{ secrets.EMAIL_USER }}'" >> $GITHUB_ENV
+          echo "EMAIL_PASS='${{ secrets.EMAIL_PASS }}'" >> $GITHUB_ENV
+          echo "DEFAULT_NOTIFY_EMAIL='${{ secrets.DEFAULT_NOTIFY_EMAIL }}'" >> $GITHUB_ENV
 
-      # Step 5: Setup Firebase service account from secret
+      # Create Firebase service account JSON file
       - name: Setup Firebase Service Account
         run: |
           mkdir -p scripts
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > scripts/serviceAccountKey.json
 
-      # Step 6: Run the reminder script
       - name: Run reminders
         run: npm run reminders
