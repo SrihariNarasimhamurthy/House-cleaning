@@ -2,8 +2,8 @@ name: Chore Reminders
 
 on:
   schedule:
-    - cron: "0 9 * * *" # Daily 9 AM UTC
-  workflow_dispatch: {}
+    - cron: "0 9 * * *" # Every day 9 AM UTC
+  workflow_dispatch:
 
 jobs:
   send-reminders:
@@ -13,7 +13,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - run: npm ci || npm i
+
+      - name: Set env variables
+        run: |
+          echo "EMAIL_USER=${{ secrets.EMAIL_USER }}" >> $GITHUB_ENV
+          echo "EMAIL_PASS=${{ secrets.EMAIL_PASS }}" >> $GITHUB_ENV
+          echo "DEFAULT_NOTIFY_EMAIL=${{ secrets.DEFAULT_NOTIFY_EMAIL }}" >> $GITHUB_ENV
+          echo "HOUSEHOLD_ID=${{ secrets.HOUSEHOLD_ID }}" >> $GITHUB_ENV
 
       - name: Setup Firebase Service Account
         run: |
@@ -21,9 +29,4 @@ jobs:
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > scripts/serviceAccountKey.json
 
       - name: Run reminders
-        env:
-          EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-          DEFAULT_NOTIFY_EMAIL: ${{ secrets.DEFAULT_NOTIFY_EMAIL }}
-          HOUSEHOLD_ID: ${{ secrets.HOUSEHOLD_ID }}
         run: npm run reminders
