@@ -21,7 +21,7 @@ jobs:
           echo "EMAIL_USER=${{ secrets.EMAIL_USER }}" >> $GITHUB_ENV
           echo "EMAIL_PASS=${{ secrets.EMAIL_PASS }}" >> $GITHUB_ENV
           echo "DEFAULT_NOTIFY_EMAIL=${{ secrets.DEFAULT_NOTIFY_EMAIL }}" >> $GITHUB_ENV
-          echo "HOUSEHOLD_ID=${{ secrets.HOUSEHOLD_ID }}" | sed 's/\$/\\$/g' >> $GITHUB_ENV
+          echo "HOUSEHOLD_ID=${{ secrets.HOUSEHOLD_ID//$/\\$ }}" >> $GITHUB_ENV
 
       - name: Setup Firebase Service Account
         run: |
