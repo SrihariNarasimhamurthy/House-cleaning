@@ -1,37 +1,40 @@
+// CommonJS for Node
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
 const path = require("path");
 const { startOfWeek, addDays, format } = require("date-fns");
 require("dotenv").config();
 
+// ---- Firebase Admin
 let serviceAccount;
 
-// Check if running in GitHub Actions (FIREBASE_SERVICE_ACCOUNT secret) or local
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-  // GitHub Actions: parse JSON from secret
+  // GitHub Actions: parse secret JSON
   serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-} else if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
-  // Local: require JSON file
-  serviceAccount = require(path.join(
-    __dirname,
-    process.env.FIREBASE_SERVICE_ACCOUNT_PATH
-  ));
 } else {
-  console.error("Firebase service account not found!");
-  process.exit(1);
+  // Local: use file
+  const localPath = path.join(__dirname, "serviceAccountKey.json");
+  try {
+    serviceAccount = require(localPath);
+  } catch {
+    console.error("Firebase service account not found!");
+    process.exit(1);
+  }
 }
 
-// Initialize Firebase
-admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
+
 const db = admin.firestore();
 
-// Mail setup
+// ---- Mail transport
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
 });
 
-// Helpers
+// ---- Helpers
 const safeKey = (s = "") =>
   s
     .toLowerCase()
@@ -58,11 +61,13 @@ async function main() {
   }
 
   const { housemates = [], chores = [], emails = [] } = householdSnap.data();
+
   const weekRef = db.doc(`households/${householdId}/weeks/${weekKey}`);
   const weekSnap = await weekRef.get();
   const weekData = weekSnap.exists ? weekSnap.data() : {};
   const choreEntries = weekData.chores || {};
 
+  // Build pending items per day
   const pendingByDay = Array.from({ length: 7 }, () => []);
   for (const chore of chores) {
     const key = safeKey(chore);
@@ -73,19 +78,21 @@ async function main() {
     }
   }
 
-  const jsDay = today.getDay();
+  // Determine today's index (0=Monday)
+  const jsDay = today.getDay(); // 0=Sunday
   const dayIndex = (jsDay + 6) % 7;
 
   const todaysChores = pendingByDay[dayIndex];
   if (!todaysChores.length) {
-    console.log(`No chores pending for today.`);
+    console.log("No chores pending today.");
     return;
   }
 
   const assignee = housemates[dayIndex] || `Person ${dayIndex + 1}`;
   const toEmail = emails[dayIndex] || process.env.DEFAULT_NOTIFY_EMAIL;
+
   if (!toEmail) {
-    console.log(`No email configured for today, skipping.`);
+    console.log("No email configured for today, skipping.");
     return;
   }
 
@@ -99,6 +106,7 @@ async function main() {
     subject: subj,
     text,
   });
+
   console.log(`Sent reminder to ${toEmail} for today.`);
 }
 
