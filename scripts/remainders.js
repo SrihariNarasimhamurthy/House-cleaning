@@ -1,3 +1,4 @@
+// CommonJS for Node.js
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
 const path = require("path");
@@ -5,14 +6,18 @@ const { startOfWeek, addDays, format } = require("date-fns");
 require("dotenv").config();
 
 // ---- Firebase Admin
-const serviceAccountPath = path.join(__dirname, "serviceAccountKey.json");
-if (!require("fs").existsSync(serviceAccountPath)) {
+let serviceAccount;
+try {
+  serviceAccount = require(path.join(__dirname, "serviceAccountKey.json"));
+} catch (e) {
   console.error("Firebase service account not found!");
   process.exit(1);
 }
+
 admin.initializeApp({
-  credential: admin.credential.cert(require(serviceAccountPath)),
+  credential: admin.credential.cert(serviceAccount),
 });
+
 const db = admin.firestore();
 
 // ---- Mail transport
@@ -39,7 +44,7 @@ async function main() {
   const monday = startOfWeek(today, { weekStartsOn: 1 });
   const weekKey = getWeekKey(today);
 
-  // Strip quotes around HOUSEHOLD_ID (GitHub Actions adds single quotes)
+  // --- Strip quotes (in case GH Actions adds them)
   const householdId = (process.env.HOUSEHOLD_ID || "demo-household").replace(
     /^'|'$/g,
     ""
@@ -48,6 +53,7 @@ async function main() {
 
   const householdRef = db.doc(`households/${householdId}`);
   const householdSnap = await householdRef.get();
+
   if (!householdSnap.exists) {
     console.log(`Household ${householdId} does not exist.`);
     return;
@@ -60,7 +66,7 @@ async function main() {
   const weekData = weekSnap.exists ? weekSnap.data() : {};
   const choreEntries = weekData.chores || {};
 
-  // Build pending items list per dayIndex
+  // Build pending chores per day
   const pendingByDay = Array.from({ length: 7 }, () => []);
   for (const chore of chores) {
     const key = safeKey(chore);
@@ -71,13 +77,13 @@ async function main() {
     }
   }
 
-  // ---- Determine today's day index (0 = Monday, 6 = Sunday)
-  const jsDay = today.getDay(); // 0 = Sunday, 1 = Monday ... 6 = Saturday
+  // Determine today's index (0=Monday)
+  const jsDay = today.getDay(); // 0=Sunday
   const dayIndex = (jsDay + 6) % 7;
-
   const todaysChores = pendingByDay[dayIndex];
+
   if (!todaysChores.length) {
-    console.log(`No chores pending for today.`);
+    console.log("No chores pending for today.");
     return;
   }
 
@@ -85,7 +91,7 @@ async function main() {
   const toEmail = emails[dayIndex] || process.env.DEFAULT_NOTIFY_EMAIL;
 
   if (!toEmail) {
-    console.log(`No email configured for today, skipping.`);
+    console.log("No email configured for today, skipping.");
     return;
   }
 
@@ -99,6 +105,7 @@ async function main() {
     subject: subj,
     text,
   });
+
   console.log(`Sent reminder to ${toEmail} for today.`);
 }
 
