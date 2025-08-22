@@ -148,7 +148,7 @@ async function main() {
       )
     : [
         process.env.HOUSEHOLD_ID?.replace(/^['"`]|['"`]$/g, "")?.trim() ||
-          "demo-household",
+          "walnut-6",
       ];
 
   console.log("Processing households:", householdIds);

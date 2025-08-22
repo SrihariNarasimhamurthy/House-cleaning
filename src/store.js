@@ -48,7 +48,7 @@ async function fileToBase64(file, maxDim = 1024, quality = 0.7) {
 
 export const useAppStore = create((set, get) => ({
   uid: null,
-  householdId: localStorage.getItem("householdId") || "demo-household",
+  householdId: localStorage.getItem("householdId") || "walnut-6",
   housemates: DEFAULT_NAMES,
   chores: ["Kitchen"], // Start with just Kitchen
   emails: [], // Email addresses for notifications
