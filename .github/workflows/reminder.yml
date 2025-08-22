@@ -2,7 +2,17 @@ name: Chore Reminders
 
 on:
   schedule:
-    - cron: "0 9 * * *" # Daily 9 AM UTC
+    # Strategic reminder times (in UTC, converted to EST times):
+    # 9 AM EST = 2 PM UTC (14:00)
+    # 12 PM EST = 5 PM UTC (17:00)
+    # 3 PM EST = 8 PM UTC (20:00)
+    # 6 PM EST = 11 PM UTC (23:00)
+    # 9 PM EST = 2 AM UTC next day (02:00)
+    - cron: "0 14 * * *" # 9 AM EST - Morning reminder
+    - cron: "0 17 * * *" # 12 PM EST - Lunch reminder
+    - cron: "0 20 * * *" # 3 PM EST - Afternoon reminder
+    - cron: "0 23 * * *" # 6 PM EST - Evening reminder
+    - cron: "0 2 * * *" # 9 PM EST - Final reminder
   workflow_dispatch: {}
 
 jobs:
@@ -17,13 +27,15 @@ jobs:
 
       - run: npm ci || npm i
 
-      # --- Set environment variables safely using printf
+      # --- Set environment variables
       - name: Set environment variables
         run: |
-          printf 'HOUSEHOLD_ID=%s\n' "${{ secrets.HOUSEHOLD_ID }}" >> $GITHUB_ENV
-          printf 'EMAIL_USER=%s\n' "${{ secrets.EMAIL_USER }}" >> $GITHUB_ENV
-          printf 'EMAIL_PASS=%s\n' "${{ secrets.EMAIL_PASS }}" >> $GITHUB_ENV
-          printf 'DEFAULT_NOTIFY_EMAIL=%s\n' "${{ secrets.DEFAULT_NOTIFY_EMAIL }}" >> $GITHUB_ENV
+          cat >> $GITHUB_ENV << 'EOF'
+          HOUSEHOLD_ID=${{ secrets.HOUSEHOLD_ID }}
+          EMAIL_USER=${{ secrets.EMAIL_USER }}
+          EMAIL_PASS=${{ secrets.EMAIL_PASS }}
+          DEFAULT_NOTIFY_EMAIL=${{ secrets.DEFAULT_NOTIFY_EMAIL }}
+          EOF
 
       # --- Setup Firebase Service Account
       - name: Setup Firebase Service Account
@@ -31,5 +43,5 @@ jobs:
           mkdir -p scripts
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > scripts/serviceAccountKey.json
 
-      - name: Run reminders
+      - name: Run smart reminders
         run: npm run reminders

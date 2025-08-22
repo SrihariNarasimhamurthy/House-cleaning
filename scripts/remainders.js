@@ -31,11 +31,9 @@ function getESTTime() {
   const now = new Date();
   const utcTime = now.getTime() + now.getTimezoneOffset() * 60000;
 
-  // EST is UTC-5, EDT is UTC-4
-  // Check if we're in daylight saving time (roughly March-November)
   const month = now.getUTCMonth();
-  const isDST = month >= 2 && month <= 10; // Approximate DST period
-  const estOffset = isDST ? -4 : -5; // EDT or EST
+  const isDST = month >= 2 && month <= 10;
+  const estOffset = isDST ? -4 : -5;
 
   const estTime = new Date(utcTime + estOffset * 3600000);
   return estTime;
@@ -55,24 +53,76 @@ const getWeekKey = (date) => {
   return `${year}-W${String(weekNum).padStart(2, "0")}`;
 };
 
+// ---- Smart Reminder Logic
+function getSmartReminderTimes(currentHour) {
+  // Strategic reminder times based on psychology and daily patterns
+  const reminderSchedule = [
+    {
+      hour: 9,
+      type: "morning",
+      message: "Good morning! Time to tackle today's chores.",
+    },
+    {
+      hour: 12,
+      type: "lunch",
+      message: "Lunch break reminder - don't forget your chores!",
+    },
+    {
+      hour: 15,
+      type: "afternoon",
+      message: "Afternoon check-in - chores still pending.",
+    },
+    {
+      hour: 18,
+      type: "evening",
+      message: "Evening reminder - please complete pending chores.",
+    },
+    {
+      hour: 21,
+      type: "final",
+      message: "Final reminder - please finish up today's chores.",
+    },
+  ];
+
+  return reminderSchedule.find((r) => r.hour === currentHour);
+}
+
+function getUrgencyLevel(currentHour, choresTotalCount) {
+  if (currentHour >= 21)
+    return { level: "high", emoji: "🚨", urgency: "URGENT" };
+  if (currentHour >= 18)
+    return { level: "medium", emoji: "⏰", urgency: "Important" };
+  if (currentHour >= 15)
+    return { level: "medium", emoji: "📝", urgency: "Reminder" };
+  if (currentHour >= 12)
+    return { level: "low", emoji: "☀️", urgency: "Friendly Reminder" };
+  return { level: "low", emoji: "🌅", urgency: "Morning Reminder" };
+}
+
 async function main() {
-  // Use EST time instead of UTC
   const today = getESTTime();
-  console.log("Current time in EST:", today.toISOString());
-  console.log("Current day in EST:", format(today, "EEEE, MMMM d, yyyy"));
+  const currentHour = today.getHours();
+
+  console.log("Current time in EST:", format(today, "yyyy-MM-dd HH:mm:ss"));
+  console.log("Current hour:", currentHour);
+
+  // Check if this is a strategic reminder time
+  const reminderTime = getSmartReminderTimes(currentHour);
+
+  if (!reminderTime) {
+    console.log(
+      `Not a strategic reminder hour (${currentHour}). Strategic hours: 9, 12, 15, 18, 21`
+    );
+    return;
+  }
 
   const monday = startOfWeek(today, { weekStartsOn: 1 });
   const weekKey = getWeekKey(today);
 
-  // Enhanced debugging for household ID
   const rawHouseholdId = process.env.HOUSEHOLD_ID || "demo-household";
-  console.log("Raw HOUSEHOLD_ID from env:", JSON.stringify(rawHouseholdId));
+  const householdId = rawHouseholdId.replace(/^['"`]|['"`]$/g, "").trim();
 
-  const householdId = rawHouseholdId
-    .replace(/^['"`]|['"`]$/g, "") // Remove surrounding quotes
-    .trim(); // Remove whitespace
-
-  console.log("Cleaned HOUSEHOLD_ID:", JSON.stringify(householdId));
+  console.log("Processing household:", JSON.stringify(householdId));
 
   const householdRef = db.doc(`households/${householdId}`);
   const householdSnap = await householdRef.get();
@@ -110,7 +160,20 @@ async function main() {
   );
 
   if (!todaysChores.length) {
-    console.log("No chores pending for today.");
+    console.log("No chores pending for today. All done! 🎉");
+    return;
+  }
+
+  // Check if we've already sent THIS SPECIFIC reminder type today
+  const todayDateKey = format(today, "yyyy-MM-dd");
+  const reminderKey = `${todayDateKey}-${reminderTime.type}`;
+  const lastReminderRef = db.doc(
+    `households/${householdId}/metadata/reminders/${reminderKey}`
+  );
+  const lastReminderSnap = await lastReminderRef.get();
+
+  if (lastReminderSnap.exists) {
+    console.log(`${reminderTime.type} reminder already sent today. Skipping.`);
     return;
   }
 
@@ -122,9 +185,28 @@ async function main() {
     return;
   }
 
+  // Get urgency level and customize message
+  const urgency = getUrgencyLevel(currentHour, todaysChores.length);
+
   const list = todaysChores.map((c) => `• ${c}`).join("\n");
-  const subj = `Chore Reminder — ${format(today, "EEE, MMM d")} (${assignee})`;
-  const text = `Hi ${assignee},\n\nThe following chores are still pending today:\n\n${list}\n\nPlease upload a photo and mark them done in the app.\n\nHousehold: ${householdId}\nWeek: ${weekKey}\n`;
+  const subj = `${urgency.emoji} ${urgency.urgency}: Chores for ${format(
+    today,
+    "EEE, MMM d"
+  )} (${assignee})`;
+
+  let customMessage = reminderTime.message;
+  if (currentHour >= 21) {
+    customMessage += " The day is almost over!";
+  } else if (currentHour >= 18) {
+    customMessage += " Evening is a great time to wrap up tasks.";
+  }
+
+  const text = `Hi ${assignee},\n\n${customMessage}\n\nPending chores (${
+    todaysChores.length
+  }):\n\n${list}\n\nPlease upload a photo and mark them done in the app.\n\n---\nHousehold: ${householdId}\nWeek: ${weekKey}\nTime: ${format(
+    today,
+    "h:mm a"
+  )} EST\n`;
 
   await transporter.sendMail({
     from: process.env.EMAIL_USER,
@@ -133,9 +215,23 @@ async function main() {
     text,
   });
 
+  // Mark this specific reminder type as sent
+  await lastReminderRef.set({
+    timestamp: admin.firestore.Timestamp.fromDate(today),
+    reminderType: reminderTime.type,
+    dayIndex,
+    choresCount: todaysChores.length,
+    hour: currentHour,
+    assignee: assignee,
+  });
+
   console.log(
-    `Sent reminder to ${toEmail} for today (${format(today, "EEE, MMM d")}).`
+    `✅ Sent ${reminderTime.type} reminder to ${toEmail} at ${format(
+      today,
+      "h:mm a"
+    )} EST`
   );
+  console.log(`   ${todaysChores.length} chores pending for ${assignee}`);
 }
 
 main().catch((e) => {
