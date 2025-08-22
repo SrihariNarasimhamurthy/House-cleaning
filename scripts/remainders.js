@@ -26,16 +26,31 @@ const transporter = nodemailer.createTransport({
   auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
 });
 
-// ---- Timezone Helper
+// ---- Fixed Timezone Helper
 function getESTTime() {
   const now = new Date();
+
+  // Get current year for DST calculation
+  const year = now.getFullYear();
+
+  // DST starts second Sunday in March, ends first Sunday in November
+  const dstStart = new Date(year, 2, 1); // March 1st
+  dstStart.setDate(dstStart.getDate() + (7 - dstStart.getDay()) + 7); // Second Sunday
+
+  const dstEnd = new Date(year, 10, 1); // November 1st
+  dstEnd.setDate(dstEnd.getDate() + (7 - dstEnd.getDay())); // First Sunday
+
+  const isDST = now >= dstStart && now < dstEnd;
+  const offset = isDST ? -4 : -5; // EDT vs EST
+
+  // Convert to EST/EDT
   const utcTime = now.getTime() + now.getTimezoneOffset() * 60000;
+  const estTime = new Date(utcTime + offset * 3600000);
 
-  const month = now.getUTCMonth();
-  const isDST = month >= 2 && month <= 10;
-  const estOffset = isDST ? -4 : -5;
+  console.log(`Current time: ${now.toISOString()}`);
+  console.log(`DST active: ${isDST}, Offset: UTC${offset}`);
+  console.log(`EST/EDT time: ${estTime.toISOString()}`);
 
-  const estTime = new Date(utcTime + estOffset * 3600000);
   return estTime;
 }
 
@@ -53,9 +68,8 @@ const getWeekKey = (date) => {
   return `${year}-W${String(weekNum).padStart(2, "0")}`;
 };
 
-// ---- Smart Reminder Logic
+// ---- Improved Smart Reminder Logic
 function getSmartReminderTimes(currentHour) {
-  // Strategic reminder times based on psychology and daily patterns
   const reminderSchedule = [
     {
       hour: 9,
@@ -93,17 +107,21 @@ function getUrgencyLevel(currentHour, choresTotalCount) {
   if (currentHour >= 18)
     return { level: "medium", emoji: "⏰", urgency: "Important" };
   if (currentHour >= 15)
-    return { level: "medium", emoji: "📝", urgency: "Reminder" };
+    return { level: "medium", emoji: "📋", urgency: "Reminder" };
   if (currentHour >= 12)
     return { level: "low", emoji: "☀️", urgency: "Friendly Reminder" };
   return { level: "low", emoji: "🌅", urgency: "Morning Reminder" };
 }
 
+// ---- Main function with improved error handling
 async function main() {
   const today = getESTTime();
   const currentHour = today.getHours();
 
-  console.log("Current time in EST:", format(today, "yyyy-MM-dd HH:mm:ss"));
+  console.log("=".repeat(50));
+  console.log("🏠 House Cleaning Reminder Script Started");
+  console.log("=".repeat(50));
+  console.log("Current time in EST/EDT:", format(today, "yyyy-MM-dd HH:mm:ss"));
   console.log("Current hour:", currentHour);
 
   // Check if this is a strategic reminder time
@@ -111,28 +129,76 @@ async function main() {
 
   if (!reminderTime) {
     console.log(
-      `Not a strategic reminder hour (${currentHour}). Strategic hours: 9, 12, 15, 18, 21`
+      `❌ Not a strategic reminder hour (${currentHour}). Strategic hours: 9, 12, 15, 18, 21`
     );
     return;
   }
 
+  console.log(
+    `✅ Strategic reminder time: ${reminderTime.type} (${currentHour}:00)`
+  );
+
   const monday = startOfWeek(today, { weekStartsOn: 1 });
   const weekKey = getWeekKey(today);
 
-  const rawHouseholdId = process.env.HOUSEHOLD_ID || "demo-household";
-  const householdId = rawHouseholdId.replace(/^['"`]|['"`]$/g, "").trim();
+  // Get all household IDs (you might want to target specific ones)
+  const householdIds = process.env.HOUSEHOLD_IDS
+    ? process.env.HOUSEHOLD_IDS.split(",").map((id) =>
+        id.trim().replace(/^['"`]|['"`]$/g, "")
+      )
+    : [
+        process.env.HOUSEHOLD_ID?.replace(/^['"`]|['"`]$/g, "")?.trim() ||
+          "demo-household",
+      ];
 
-  console.log("Processing household:", JSON.stringify(householdId));
+  console.log("Processing households:", householdIds);
 
+  for (const householdId of householdIds) {
+    console.log(`\n📧 Processing household: ${householdId}`);
+
+    try {
+      await processHousehold(
+        householdId,
+        today,
+        currentHour,
+        weekKey,
+        reminderTime
+      );
+    } catch (error) {
+      console.error(`❌ Error processing household ${householdId}:`, error);
+      // Continue with other households
+    }
+  }
+
+  console.log("\n🎉 Reminder script completed");
+}
+
+async function processHousehold(
+  householdId,
+  today,
+  currentHour,
+  weekKey,
+  reminderTime
+) {
   const householdRef = db.doc(`households/${householdId}`);
   const householdSnap = await householdRef.get();
 
   if (!householdSnap.exists) {
-    console.log(`Household ${householdId} does not exist.`);
+    console.log(`   ⚠️  Household ${householdId} does not exist.`);
     return;
   }
 
-  const { housemates = [], chores = [], emails = [] } = householdSnap.data();
+  const householdData = householdSnap.data();
+  const { housemates = [], chores = [], emails = [] } = householdData;
+
+  console.log(`   👥 Housemates: ${housemates.length}`);
+  console.log(`   🧹 Chores: ${chores.length}`);
+  console.log(`   📧 Emails configured: ${emails.length}`);
+
+  if (!chores.length) {
+    console.log("   ⚠️  No chores configured for this household");
+    return;
+  }
 
   const weekRef = db.doc(`households/${householdId}/weeks/${weekKey}`);
   const weekSnap = await weekRef.get();
@@ -146,21 +212,24 @@ async function main() {
     const days = choreEntries[key] || {};
     for (let i = 0; i < 7; i++) {
       const entry = days[i] || null;
-      if (!entry || !entry.doneBy) pendingByDay[i].push(chore);
+      if (!entry || !entry.doneBy) {
+        pendingByDay[i].push(chore);
+      }
     }
   }
 
   // Determine today's index using EST time (0=Monday)
   const jsDay = today.getDay(); // 0=Sunday
-  const dayIndex = (jsDay + 6) % 7;
+  const dayIndex = (jsDay + 6) % 7; // Convert to Monday=0
   const todaysChores = pendingByDay[dayIndex];
 
   console.log(
-    `Today is ${format(today, "EEEE")} (day index: ${dayIndex}) in EST`
+    `   📅 Today is ${format(today, "EEEE")} (day index: ${dayIndex})`
   );
+  console.log(`   🧹 Pending chores today: ${todaysChores.length}`);
 
   if (!todaysChores.length) {
-    console.log("No chores pending for today. All done! 🎉");
+    console.log("   ✅ No chores pending for today. All done! 🎉");
     return;
   }
 
@@ -173,17 +242,29 @@ async function main() {
   const lastReminderSnap = await lastReminderRef.get();
 
   if (lastReminderSnap.exists) {
-    console.log(`${reminderTime.type} reminder already sent today. Skipping.`);
+    console.log(
+      `   ⚠️  ${reminderTime.type} reminder already sent today. Skipping.`
+    );
     return;
   }
 
   const assignee = housemates[dayIndex] || `Person ${dayIndex + 1}`;
-  const toEmail = emails[dayIndex] || process.env.DEFAULT_NOTIFY_EMAIL;
+
+  // Improved email selection with fallbacks
+  let toEmail = emails[dayIndex] || process.env.DEFAULT_NOTIFY_EMAIL;
+
+  // If no email configured, try to find any email
+  if (!toEmail && emails.length > 0) {
+    toEmail = emails.find((email) => email && email.trim()) || emails[0];
+  }
 
   if (!toEmail) {
-    console.log("No email configured for today, skipping.");
+    console.log("   ⚠️  No email configured for today, skipping.");
     return;
   }
+
+  console.log(`   👤 Assignee: ${assignee}`);
+  console.log(`   📧 Email: ${toEmail}`);
 
   // Get urgency level and customize message
   const urgency = getUrgencyLevel(currentHour, todaysChores.length);
@@ -201,40 +282,52 @@ async function main() {
     customMessage += " Evening is a great time to wrap up tasks.";
   }
 
-  const text = `Hi ${assignee},\n\n${customMessage}\n\nPending chores (${
-    todaysChores.length
-  }):\n\n${list}\n\nPlease upload a photo and mark them done in the app.\n\n---\nHousehold: ${householdId}\nWeek: ${weekKey}\nTime: ${format(
-    today,
-    "h:mm a"
-  )} EST\n`;
+  const text = `Hi ${assignee},
 
-  await transporter.sendMail({
-    from: process.env.EMAIL_USER,
-    to: toEmail,
-    subject: subj,
-    text,
-  });
+${customMessage}
 
-  // Mark this specific reminder type as sent
-  await lastReminderRef.set({
-    timestamp: admin.firestore.Timestamp.fromDate(today),
-    reminderType: reminderTime.type,
-    dayIndex,
-    choresCount: todaysChores.length,
-    hour: currentHour,
-    assignee: assignee,
-  });
+Pending chores (${todaysChores.length}):
 
-  console.log(
-    `✅ Sent ${reminderTime.type} reminder to ${toEmail} at ${format(
-      today,
-      "h:mm a"
-    )} EST`
-  );
-  console.log(`   ${todaysChores.length} chores pending for ${assignee}`);
+${list}
+
+Please upload a photo and mark them done in the app.
+
+---
+Household: ${householdId}
+Week: ${weekKey}
+Time: ${format(today, "h:mm a")} EST
+`;
+
+  try {
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: toEmail,
+      subject: subj,
+      text,
+    });
+
+    // Mark this specific reminder type as sent
+    await lastReminderRef.set({
+      timestamp: admin.firestore.Timestamp.fromDate(today),
+      reminderType: reminderTime.type,
+      dayIndex,
+      choresCount: todaysChores.length,
+      hour: currentHour,
+      assignee: assignee,
+      emailSent: toEmail,
+      chores: todaysChores,
+    });
+
+    console.log(`   ✅ Sent ${reminderTime.type} reminder to ${toEmail}`);
+    console.log(`      ${todaysChores.length} chores pending for ${assignee}`);
+  } catch (emailError) {
+    console.error(`   ❌ Failed to send email:`, emailError);
+    throw emailError;
+  }
 }
 
+// ---- Error handling and execution
 main().catch((e) => {
-  console.error(e);
+  console.error("💥 Script failed with error:", e);
   process.exit(1);
 });

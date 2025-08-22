@@ -9,6 +9,8 @@ export default function Settings({ onClose }) {
     setChores,
     householdId,
     setHouseholdId,
+    emails,
+    setEmails,
   } = useAppStore();
   const [newChore, setNewChore] = useState("");
   const [code, setCode] = useState(householdId);
@@ -62,6 +64,25 @@ export default function Settings({ onClose }) {
             <input
               value={n}
               onChange={(e) => setHousemate(i, e.target.value)}
+              placeholder={`Person ${i + 1} name`}
+            />
+          </div>
+        ))}
+      </div>
+
+      <h4 style={{ marginTop: 16 }}>Email Notifications</h4>
+      <div className="date" style={{ marginBottom: 8 }}>
+        Configure emails to receive automatic reminders for pending chores
+      </div>
+      <div className="form-row">
+        {housemates.map((n, i) => (
+          <div key={i}>
+            <label>{n || `Person ${i + 1}`} Email</label>
+            <input
+              type="email"
+              value={emails?.[i] || ""}
+              onChange={(e) => setEmails(i, e.target.value)}
+              placeholder={`${n || `Person ${i + 1}`} email address`}
             />
           </div>
         ))}
@@ -74,6 +95,11 @@ export default function Settings({ onClose }) {
           placeholder="Add chore (e.g., Living Room)"
           value={newChore}
           onChange={(e) => setNewChore(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              addChore();
+            }
+          }}
         />
         <button className="btn" onClick={addChore}>
           Add
