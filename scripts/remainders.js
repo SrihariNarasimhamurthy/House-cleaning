@@ -168,7 +168,7 @@ async function main() {
   const todayDateKey = format(today, "yyyy-MM-dd");
   const reminderKey = `${todayDateKey}-${reminderTime.type}`;
   const lastReminderRef = db.doc(
-    `households/${householdId}/metadata/reminders/${reminderKey}`
+    `households/${householdId}/reminders/${reminderKey}`
   );
   const lastReminderSnap = await lastReminderRef.get();
 
