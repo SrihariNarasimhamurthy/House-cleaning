@@ -26,12 +26,28 @@ const transporter = nodemailer.createTransport({
   auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
 });
 
+// ---- Timezone Helper
+function getESTTime() {
+  const now = new Date();
+  const utcTime = now.getTime() + now.getTimezoneOffset() * 60000;
+
+  // EST is UTC-5, EDT is UTC-4
+  // Check if we're in daylight saving time (roughly March-November)
+  const month = now.getUTCMonth();
+  const isDST = month >= 2 && month <= 10; // Approximate DST period
+  const estOffset = isDST ? -4 : -5; // EDT or EST
+
+  const estTime = new Date(utcTime + estOffset * 3600000);
+  return estTime;
+}
+
 // ---- Helpers
 const safeKey = (s = "") =>
   s
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
+
 const getWeekKey = (date) => {
   const monday = startOfWeek(date, { weekStartsOn: 1 });
   const weekNum = Number(format(monday, "I"));
@@ -40,16 +56,23 @@ const getWeekKey = (date) => {
 };
 
 async function main() {
-  const today = new Date();
+  // Use EST time instead of UTC
+  const today = getESTTime();
+  console.log("Current time in EST:", today.toISOString());
+  console.log("Current day in EST:", format(today, "EEEE, MMMM d, yyyy"));
+
   const monday = startOfWeek(today, { weekStartsOn: 1 });
   const weekKey = getWeekKey(today);
 
-  // --- Strip quotes (in case GH Actions adds them)
-  const householdId = (process.env.HOUSEHOLD_ID || "demo-household").replace(
-    /^'|'$/g,
-    ""
-  );
-  console.log("HOUSEHOLD_ID env:", householdId);
+  // Enhanced debugging for household ID
+  const rawHouseholdId = process.env.HOUSEHOLD_ID || "demo-household";
+  console.log("Raw HOUSEHOLD_ID from env:", JSON.stringify(rawHouseholdId));
+
+  const householdId = rawHouseholdId
+    .replace(/^['"`]|['"`]$/g, "") // Remove surrounding quotes
+    .trim(); // Remove whitespace
+
+  console.log("Cleaned HOUSEHOLD_ID:", JSON.stringify(householdId));
 
   const householdRef = db.doc(`households/${householdId}`);
   const householdSnap = await householdRef.get();
@@ -77,10 +100,14 @@ async function main() {
     }
   }
 
-  // Determine today's index (0=Monday)
+  // Determine today's index using EST time (0=Monday)
   const jsDay = today.getDay(); // 0=Sunday
   const dayIndex = (jsDay + 6) % 7;
   const todaysChores = pendingByDay[dayIndex];
+
+  console.log(
+    `Today is ${format(today, "EEEE")} (day index: ${dayIndex}) in EST`
+  );
 
   if (!todaysChores.length) {
     console.log("No chores pending for today.");
@@ -106,7 +133,9 @@ async function main() {
     text,
   });
 
-  console.log(`Sent reminder to ${toEmail} for today.`);
+  console.log(
+    `Sent reminder to ${toEmail} for today (${format(today, "EEE, MMM d")}).`
+  );
 }
 
 main().catch((e) => {
