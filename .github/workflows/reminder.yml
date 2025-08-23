@@ -2,17 +2,18 @@ name: Chore Reminders
 
 on:
   schedule:
-    # Strategic reminder times (in UTC, converted to EST times):
-    # 9 AM EST = 2 PM UTC (14:00)
-    # 12 PM EST = 5 PM UTC (17:00)
-    # 3 PM EST = 8 PM UTC (20:00)
-    # 6 PM EST = 11 PM UTC (23:00)
-    # 9 PM EST = 2 AM UTC next day (02:00)
-    - cron: "0 14 * * *" # 9 AM EST - Morning reminder
-    - cron: "0 17 * * *" # 12 PM EST - Lunch reminder
-    - cron: "0 20 * * *" # 3 PM EST - Afternoon reminder
-    - cron: "0 23 * * *" # 6 PM EST - Evening reminder
-    - cron: "0 2 * * *" # 9 PM EST - Final reminder
+    # Strategic reminder times (in UTC, converted to EDT times):
+    # August is EDT (UTC-4), not EST (UTC-5)
+    # 9 AM EDT = 1 PM UTC (13:00)
+    # 12 PM EDT = 4 PM UTC (16:00)
+    # 3 PM EDT = 7 PM UTC (19:00)
+    # 6 PM EDT = 10 PM UTC (22:00)
+    # 9 PM EDT = 1 AM UTC next day (01:00)
+    - cron: "0 13 * * *" # 9 AM EDT - Morning reminder
+    - cron: "0 16 * * *" # 12 PM EDT - Lunch reminder
+    - cron: "0 19 * * *" # 3 PM EDT - Afternoon reminder
+    - cron: "0 22 * * *" # 6 PM EDT - Evening reminder
+    - cron: "0 1 * * *" # 9 PM EDT - Final reminder (1 AM UTC next day)
   workflow_dispatch: {}
 
 jobs:
