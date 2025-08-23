@@ -5,6 +5,48 @@ const path = require("path");
 const { startOfWeek, addDays, format } = require("date-fns");
 require("dotenv").config();
 
+// ---- Debug Environment Variables
+console.log("🔧 Environment Variables Check:");
+console.log("EMAIL_USER:", process.env.EMAIL_USER ? "✅ Set" : "❌ Missing");
+console.log("EMAIL_PASS:", process.env.EMAIL_PASS ? "✅ Set" : "❌ Missing");
+console.log(
+  "HOUSEHOLD_ID:",
+  process.env.HOUSEHOLD_ID ? "✅ Set" : "❌ Missing"
+);
+console.log(
+  "DEFAULT_NOTIFY_EMAIL:",
+  process.env.DEFAULT_NOTIFY_EMAIL ? "✅ Set" : "❌ Missing"
+);
+console.log("");
+
+// ---- Debug Environment Variables
+console.log("🔧 Environment Variables Check:");
+console.log("EMAIL_USER:", process.env.EMAIL_USER ? "✅ Set" : "❌ Missing");
+console.log("EMAIL_PASS:", process.env.EMAIL_PASS ? "✅ Set" : "❌ Missing");
+console.log(
+  "HOUSEHOLD_ID:",
+  process.env.HOUSEHOLD_ID ? "✅ Set" : "❌ Missing"
+);
+console.log(
+  "DEFAULT_NOTIFY_EMAIL:",
+  process.env.DEFAULT_NOTIFY_EMAIL ? "✅ Set" : "❌ Missing"
+);
+console.log("");
+
+// ---- Debug Environment Variables
+console.log("🔧 Environment Variables Check:");
+console.log("EMAIL_USER:", process.env.EMAIL_USER ? "✅ Set" : "❌ Missing");
+console.log("EMAIL_PASS:", process.env.EMAIL_PASS ? "✅ Set" : "❌ Missing");
+console.log(
+  "HOUSEHOLD_ID:",
+  process.env.HOUSEHOLD_ID ? "✅ Set" : "❌ Missing"
+);
+console.log(
+  "DEFAULT_NOTIFY_EMAIL:",
+  process.env.DEFAULT_NOTIFY_EMAIL ? "✅ Set" : "❌ Missing"
+);
+console.log("");
+
 // ---- Firebase Admin
 let serviceAccount;
 try {
@@ -92,6 +134,11 @@ function getSmartReminderTimes(currentHour) {
       message: "Evening reminder - please complete pending chores.",
     },
     {
+      hour: 20,
+      type: "late_evening",
+      message: "Late evening reminder - chores still need attention.",
+    },
+    {
       hour: 21,
       type: "final",
       message: "Final reminder - please finish up today's chores.",
@@ -129,7 +176,7 @@ async function main() {
 
   if (!reminderTime) {
     console.log(
-      `❌ Not a strategic reminder hour (${currentHour}). Strategic hours: 9, 12, 15, 18, 21`
+      `❌ Not a strategic reminder hour (${currentHour}). Strategic hours: 9, 12, 15, 18, 20, 21`
     );
     return;
   }
@@ -251,7 +298,10 @@ async function processHousehold(
   const assignee = housemates[dayIndex] || `Person ${dayIndex + 1}`;
 
   // Improved email selection with fallbacks
-  let toEmail = emails[dayIndex] || process.env.DEFAULT_NOTIFY_EMAIL;
+  let toEmail =
+    emails[dayIndex] ||
+    process.env.DEFAULT_NOTIFY_EMAIL ||
+    process.env.EMAIL_USER;
 
   // If no email configured, try to find any email
   if (!toEmail && emails.length > 0) {
